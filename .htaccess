@@ -1,0 +1,16 @@
+RewriteEngine On
+
+# Mengarahkan /info dan /info/1 ke info.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^info/([0-9]+)$ info.php?id=$1 [QSA,L]
+RewriteRule ^info$ info.php [QSA,L]
+
+# Mengarahkan /agenda dan /agenda/1 ke agenda.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^agenda/([0-9]+)$ agenda.php?id=$1 [QSA,L]
+RewriteRule ^agenda$ agenda.php [QSA,L]
+
+# Mengarahkan /jadwal dan /jadwal/1 ke jadwal.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^jadwal/([0-9]+)$ jadwal.php?id=$1 [QSA,L]
+RewriteRule ^jadwal$ jadwal.php [QSA,L]
