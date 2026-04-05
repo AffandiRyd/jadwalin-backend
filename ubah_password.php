@@ -34,9 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    // FIX: Hash password barunya biar aman dan bisa terbaca oleh login.php
+    $hashed_password = password_hash($password_baru, PASSWORD_DEFAULT);
+
     // Update password berdasarkan id_user
     $stmt = $conn->prepare("UPDATE users SET password = ? WHERE id_user = ?");
-    $stmt->bind_param("si", $password_baru, $id_user);
+    $stmt->bind_param("si", $hashed_password, $id_user);
     
     if ($stmt->execute()) {
         echo(json_encode(["success" => true, "message" => "Password berhasil diubah!"]));

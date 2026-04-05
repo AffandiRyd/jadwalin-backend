@@ -21,22 +21,23 @@ if(isset($data->username) && isset($data->password)) {
     if($result->num_rows > 0) {
         $user = $result->fetch_assoc();
         
-        // --- KODE YANG SUDAH DIPERBAIKI ---
-        if($password_input === $user['password']) {
-    
-        // Kita tambahkan id_kelas ke dalam array data
-        echo json_encode([
-            "success" => true, 
-            "message" => "Login berhasil",
-            "data" => [
-            "id_user" => $user['id_user'],
-            "username" => $user['username'],
-            "nama_lengkap" => $user['nama_lengkap'],
-            "role" => $user['role'],
-            "id_kelas" => $user['id_kelas'] // WAJIB ADA INI BIAR REACT TAU KELASNYA
-        ]
-        ]);
-    } else {
+        // FIX: Pakai password_verify() untuk baca hash. 
+        // Gw tambahin "|| $password_input === $user['password']" buat jaga-jaga kalau ada akun lama yg belum di-hash.
+        if(password_verify($password_input, $user['password']) || $password_input === $user['password']) {
+            
+            // Login sukses, kirim semua data termasuk id_kelas
+            echo json_encode([
+                "success" => true, 
+                "message" => "Login berhasil",
+                "data" => [
+                    "id_user" => $user['id_user'],
+                    "username" => $user['username'],
+                    "nama_lengkap" => $user['nama_lengkap'],
+                    "role" => $user['role'],
+                    "id_kelas" => $user['id_kelas'] 
+                ]
+            ]);
+        } else {
             echo(json_encode(["success" => false, "message" => "Password salah!"]));
         }
     } else {

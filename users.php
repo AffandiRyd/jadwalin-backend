@@ -36,9 +36,14 @@ switch($method) {
         $data = json_decode(file_get_contents("php://input"));
         if(!empty($data->username) && !empty($data->password) && !empty($data->nama_lengkap)) {
             $username = $conn->real_escape_string($data->username);
-            $password = $conn->real_escape_string($data->password); // Tambahin MD5/Bcrypt di sini kalau db lu pake hash
+            
+            // FIX: Hash password biar aman dan sama persis sistemnya kayak register.php
+            $password = password_hash($data->password, PASSWORD_DEFAULT); 
+            
             $nama_lengkap = $conn->real_escape_string($data->nama_lengkap);
-            $id_kelas = !empty($data->id_kelas) ? $data->id_kelas : NULL;
+            
+            // FIX: Tangkap id_kelas dengan benar
+            $id_kelas = (isset($data->id_kelas) && $data->id_kelas !== "") ? $conn->real_escape_string($data->id_kelas) : "NULL";
             $role = 'pengurus'; // Default role
 
             // Cek username udah ada blm
@@ -48,12 +53,14 @@ switch($method) {
                 exit;
             }
 
-            $query = "INSERT INTO users (username, password, nama_lengkap, id_kelas, role) VALUES ('$username', '$password', '$nama_lengkap', " . ($id_kelas ? "'$id_kelas'" : "NULL") . ", '$role')";
+            // Insert data
+            $query = "INSERT INTO users (username, password, nama_lengkap, role, id_kelas) 
+                      VALUES ('$username', '$password', '$nama_lengkap', '$role', $id_kelas)";
             
             if($conn->query($query)) {
                 echo(json_encode(['success' => true, 'message' => 'Akun berhasil dibuat.']));
             } else {
-                echo(json_encode(['success' => false, 'message' => 'Gagal membuat akun.']));
+                echo(json_encode(['success' => false, 'message' => 'Gagal membuat akun: ' . $conn->error]));
             }
         } else {
             echo(json_encode(['success' => false, 'message' => 'Data tidak lengkap.']));
@@ -63,11 +70,13 @@ switch($method) {
     case 'PUT':
         // Update user
         $data = json_decode(file_get_contents("php://input"));
-        $id = isset($_GET['id']) ? $_GET['id'] : die(json_encode(['success' => false, 'message' => 'ID tidak ditemukan.']));
+        $id = isset($_GET['id']) ? $conn->real_escape_string($_GET['id']) : die(json_encode(['success' => false, 'message' => 'ID tidak ditemukan.']));
         
         $username = $conn->real_escape_string($data->username);
         $nama_lengkap = $conn->real_escape_string($data->nama_lengkap);
-        $id_kelas = !empty($data->id_kelas) ? $data->id_kelas : NULL;
+        
+        // FIX: Tangkap id_kelas dengan benar untuk Update
+        $id_kelas = (isset($data->id_kelas) && $data->id_kelas !== "") ? $conn->real_escape_string($data->id_kelas) : "NULL";
         
         // Cek apakah username dipakai orang lain
         $cek = $conn->query("SELECT * FROM users WHERE username='$username' AND id_user != '$id'");
@@ -78,22 +87,22 @@ switch($method) {
 
         // Kalau password diisi, ikut diupdate. Kalau kosong, biarin password lama
         if(!empty($data->password)) {
-            $password = $conn->real_escape_string($data->password);
-            $query = "UPDATE users SET username='$username', password='$password', nama_lengkap='$nama_lengkap', id_kelas=" . ($id_kelas ? "'$id_kelas'" : "NULL") . " WHERE id_user='$id'";
+            $password = password_hash($data->password, PASSWORD_DEFAULT); // FIX: Hashing password saat di-update
+            $query = "UPDATE users SET username='$username', password='$password', nama_lengkap='$nama_lengkap', id_kelas=$id_kelas WHERE id_user='$id'";
         } else {
-            $query = "UPDATE users SET username='$username', nama_lengkap='$nama_lengkap', id_kelas=" . ($id_kelas ? "'$id_kelas'" : "NULL") . " WHERE id_user='$id'";
+            $query = "UPDATE users SET username='$username', nama_lengkap='$nama_lengkap', id_kelas=$id_kelas WHERE id_user='$id'";
         }
 
         if($conn->query($query)) {
             echo(json_encode(['success' => true, 'message' => 'Data akun berhasil diupdate.']));
         } else {
-            echo(json_encode(['success' => false, 'message' => 'Gagal update akun.']));
+            echo(json_encode(['success' => false, 'message' => 'Gagal update akun: ' . $conn->error]));
         }
         break;
 
     case 'DELETE':
         // Hapus user
-        $id = isset($_GET['id']) ? $_GET['id'] : die(json_encode(['success' => false, 'message' => 'ID tidak ditemukan.']));
+        $id = isset($_GET['id']) ? $conn->real_escape_string($_GET['id']) : die(json_encode(['success' => false, 'message' => 'ID tidak ditemukan.']));
         if($conn->query("DELETE FROM users WHERE id_user='$id'")) {
             echo(json_encode(['success' => true, 'message' => 'Akun berhasil dihapus.']));
         } else {

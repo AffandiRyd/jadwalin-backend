@@ -6,8 +6,7 @@ header("Content-Type: application/json; charset=UTF-8");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 
-$conn = new mysqli("localhost", "root", "", "db_jadwalin");
-if ($conn->connect_error) { die(json_encode(["success" => false, "message" => "Koneksi gagal"])); }
+include 'koneksi.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 

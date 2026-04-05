@@ -6,98 +6,101 @@ header("Content-Type: application/json; charset=UTF-8");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 
-require 'koneksi.php';
+include 'koneksi.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
-$id_jadwal = isset($_GET['id']) ? $_GET['id'] : null;
-$data = json_decode(file_get_contents("php://input"));
 
-// CARA BARU YANG AMPUH:
-// Ambil id_kelas langsung dari data POST/PUT (body) ATAU dari URL GET/DELETE
-$id_kelas_user = isset($data->id_kelas) ? $data->id_kelas : (isset($_GET['id_kelas']) ? $_GET['id_kelas'] : null);
+if ($method === 'GET') {
+    // Tangkap id_kelas dari URL (dikirim dari React)
+    $id_kelas = isset($_GET['id_kelas']) ? $conn->real_escape_string($_GET['id_kelas']) : '';
 
-switch($method) {
-    case 'GET':
-        $sql = "SELECT j.*, k.nama_kelas, m.nama_mapel, g.nama_guru 
-                FROM jadwal j
-                LEFT JOIN kelas k ON j.id_kelas = k.id_kelas
-                LEFT JOIN mapel m ON j.id_mapel = m.id_mapel
-                LEFT JOIN guru g ON j.id_guru = g.id_guru";
-        
-        if ($id_kelas_user) {
-            $sql .= " WHERE j.id_kelas = " . $conn->real_escape_string($id_kelas_user);
-        }
-        
-        $sql .= " ORDER BY j.jam_mulai ASC";
+    $query = "SELECT j.id_jadwal, j.hari, j.jam_mulai, j.jam_selesai, j.ruangan, j.id_kelas, j.id_guru, j.id_mapel,
+                     k.nama_kelas, g.nama_guru, m.nama_mapel 
+              FROM jadwal j 
+              LEFT JOIN kelas k ON j.id_kelas = k.id_kelas 
+              LEFT JOIN guru g ON j.id_guru = g.id_guru 
+              LEFT JOIN mapel m ON j.id_mapel = m.id_mapel";
+              
+    // MAGIC FILTERNYA DI SINI: Kalau ada id_kelas, tampilin yang cocok aja
+    if (!empty($id_kelas)) {
+        $query .= " WHERE j.id_kelas = '$id_kelas'";
+    }
 
-        $result = $conn->query($sql);
-        $jadwal = [];
-        if ($result) {
-            while($row = $result->fetch_assoc()) {
-                $jadwal[] = $row;
-            }
-        }
-        echo(json_encode(["success" => true, "data" => $jadwal]));
-        break;
+    // Biar urut dari jam pertama
+    $query .= " ORDER BY j.jam_mulai ASC";
 
-    case 'POST':
-        if (!$id_kelas_user) {
-            echo(json_encode(["success" => false, "message" => "Akses Ditolak! Cuma pengurus kelas yang bisa nambah jadwal."]));
-            exit();
-        }
+    $result = $conn->query($query);
+    $data = [];
+    if($result) {
+        while($row = $result->fetch_assoc()) { $data[] = $row; }
+    }
+    echo(json_encode(["success" => true, "data" => $data]));
+} 
+// ... kodingan atas tetep sama ...
 
-        $id_mapel = $conn->real_escape_string($data->id_mapel);
-        $id_guru = $conn->real_escape_string($data->id_guru);
-        $hari = $conn->real_escape_string($data->hari);
-        $jam_mulai = $conn->real_escape_string($data->jam_mulai);
-        $jam_selesai = $conn->real_escape_string($data->jam_selesai);
-        $ruangan = $conn->real_escape_string($data->ruangan);
-        
-        $sql = "INSERT INTO jadwal (id_kelas, id_mapel, id_guru, hari, jam_mulai, jam_selesai, ruangan) 
-                VALUES ('$id_kelas_user', '$id_mapel', '$id_guru', '$hari', '$jam_mulai', '$jam_selesai', '$ruangan')";
-        
-        if($conn->query($sql)) {
-            echo(json_encode(["success" => true, "message" => "Jadwal kelas berhasil ditambah!"]));
-        } else {
-            echo(json_encode(["success" => false, "message" => "Gagal: " . $conn->error]));
-        }
-        break;
+elseif ($method === 'POST') {
+    $input = json_decode(file_get_contents("php://input"), true);
+    
+    // Tangkap data
+    $id_kelas = isset($input['id_kelas']) ? $conn->real_escape_string($input['id_kelas']) : '';
+    $id_mapel = isset($input['id_mapel']) ? $conn->real_escape_string($input['id_mapel']) : '';
+    $id_guru  = isset($input['id_guru']) ? $conn->real_escape_string($input['id_guru']) : '';
+    $hari     = isset($input['hari']) ? $conn->real_escape_string($input['hari']) : '';
+    $jam_mulai = isset($input['jam_mulai']) ? $conn->real_escape_string($input['jam_mulai']) : '';
+    $jam_selesai = isset($input['jam_selesai']) ? $conn->real_escape_string($input['jam_selesai']) : '';
+    $ruangan  = isset($input['ruangan']) ? $conn->real_escape_string($input['ruangan']) : '';
+    
+    // --- TAMBAHAN SATPAM (VALIDASI) DI SINI ---
+    // Cek kalau id_kelas, id_mapel, atau id_guru kosong, langsung tolak!
+    if (empty($id_kelas) || empty($id_mapel) || empty($id_guru)) {
+        echo(json_encode([
+            "success" => false, 
+            "message" => "Gagal: id_kelas, id_mapel, dan id_guru tidak boleh kosong! Pastikan dropdown di React sudah dipilih."
+        ]));
+        exit; // Hentikan proses PHP sampai sini, jangan lanjut ke query
+    }
+    // ------------------------------------------
 
-    case 'PUT':
-        if($id_jadwal && $id_kelas_user) {
-            $id_mapel = $conn->real_escape_string($data->id_mapel);
-            $id_guru = $conn->real_escape_string($data->id_guru);
-            $hari = $conn->real_escape_string($data->hari);
-            $jam_mulai = $conn->real_escape_string($data->jam_mulai);
-            $jam_selesai = $conn->real_escape_string($data->jam_selesai);
-            $ruangan = $conn->real_escape_string($data->ruangan);
-            
-            $sql = "UPDATE jadwal SET 
-                    id_mapel='$id_mapel', id_guru='$id_guru', hari='$hari', 
-                    jam_mulai='$jam_mulai', jam_selesai='$jam_selesai', ruangan='$ruangan' 
-                    WHERE id_jadwal=$id_jadwal AND id_kelas=$id_kelas_user";
-            
-            if($conn->query($sql)) {
-                echo(json_encode(["success" => true, "message" => "Jadwal berhasil diupdate!"]));
-            } else {
-                echo(json_encode(["success" => false, "message" => "Gagal: " . $conn->error]));
-            }
-        } else {
-            echo(json_encode(["success" => false, "message" => "Akses Ditolak atau ID Jadwal tidak valid."]));
-        }
-        break;
-
-    case 'DELETE':
-        if($id_jadwal && $id_kelas_user) {
-            $sql = "DELETE FROM jadwal WHERE id_jadwal=$id_jadwal AND id_kelas=$id_kelas_user";
-            if($conn->query($sql)) {
-                echo(json_encode(["success" => true, "message" => "Jadwal berhasil dihapus!"]));
-            } else {
-                echo(json_encode(["success" => false, "message" => "Gagal: " . $conn->error]));
-            }
-        } else {
-            echo(json_encode(["success" => false, "message" => "Akses Ditolak atau ID Jadwal tidak valid."]));
-        }
-        break;
+    $query = "INSERT INTO jadwal (id_kelas, id_mapel, id_guru, hari, jam_mulai, jam_selesai, ruangan) 
+              VALUES ('$id_kelas', '$id_mapel', '$id_guru', '$hari', '$jam_mulai', '$jam_selesai', '$ruangan')";
+              
+    if ($conn->query($query)) {
+        echo(json_encode(["success" => true, "message" => "Jadwal berhasil ditambahkan!"]));
+    } else { 
+        echo(json_encode(["success" => false, "message" => "Gagal menambahkan: " . $conn->error])); 
+    }
 }
+elseif ($method === 'PUT') {
+    $input = json_decode(file_get_contents("php://input"), true);
+    $id_jadwal = $_GET['id'];
+    
+    // FIX: Tahan banting juga buat fitur Edit
+    $id_mapel = isset($input['id_mapel']) ? $conn->real_escape_string($input['id_mapel']) : '';
+    $id_guru  = isset($input['id_guru']) ? $conn->real_escape_string($input['id_guru']) : '';
+    $hari     = isset($input['hari']) ? $conn->real_escape_string($input['hari']) : '';
+    $jam_mulai = isset($input['jam_mulai']) ? $conn->real_escape_string($input['jam_mulai']) : '';
+    $jam_selesai = isset($input['jam_selesai']) ? $conn->real_escape_string($input['jam_selesai']) : '';
+    $ruangan  = isset($input['ruangan']) ? $conn->real_escape_string($input['ruangan']) : '';
+    
+    $query = "UPDATE jadwal SET id_mapel='$id_mapel', id_guru='$id_guru', hari='$hari', 
+              jam_mulai='$jam_mulai', jam_selesai='$jam_selesai', ruangan='$ruangan' 
+              WHERE id_jadwal='$id_jadwal'";
+              
+    if ($conn->query($query)) {
+        echo(json_encode(["success" => true, "message" => "Jadwal berhasil diupdate!"]));
+    } else { 
+        echo(json_encode(["success" => false, "message" => "Gagal update: " . $conn->error])); 
+    }
+}
+
+// ... kodingan DELETE ke bawah tetep sama ...
+elseif ($method === 'DELETE') {
+    $id_jadwal = $_GET['id'];
+    if ($conn->query("DELETE FROM jadwal WHERE id_jadwal='$id_jadwal'")) {
+        echo(json_encode(["success" => true, "message" => "Jadwal dihapus!"]));
+    } else { 
+        echo(json_encode(["success" => false, "message" => "Gagal menghapus: " . $conn->error])); 
+    }
+}
+$conn->close();
 ?>
